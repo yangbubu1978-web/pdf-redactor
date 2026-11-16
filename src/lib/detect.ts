@@ -126,6 +126,11 @@ export const RULES: DetectRule[] = [
   { category: '金額', riskLevel: 'HIGH', priority: 82, confidence: 'high',
     pattern: /(?:USD|US\$|TWD|NT\$|CNY|RMB|EUR|JPY|HKD|GBP|AUD|VND|THB|KRW|SGD|MYR|CAD|美金|美元|台幣|新台幣|人民幣|日幣|日圓|歐元|港幣|英鎊|越南盾|泰銖|韓元|澳幣|加幣)[ ]?\$?[ ]?(\d[\d,]*(?:\.\d+)?)/gi, captureGroup: 1, rejectAfter: UNITS },
 
+  // 金額：純整數費用（例：推廣貿易服務費 148），只抓緊跟在費用名稱後面的數字
+  { category: '金額', riskLevel: 'MEDIUM', priority: 58, confidence: 'medium',
+    pattern: /(?:推\s*廣\s*貿\s*易\s*服\s*務\s*費|滯\s*納\s*金|手\s*續\s*費|代\s*辦\s*費|服\s*務\s*費)[^0-9]{0,6}(\d{1,6})(?!\d)(?!%)/g,
+    captureGroup: 1, rejectAfter: ['%'] },
+
   // 金額：有幣別符號就直接抓
   { category: '金額', riskLevel: 'MEDIUM', priority: 80, confidence: 'high',
     pattern: /(?:NT\$|N\$|＄|\$)[ ]?\d{1,3}(?:,\d{3})*(?:\.\d+)?/g, rejectAfter: UNITS },
