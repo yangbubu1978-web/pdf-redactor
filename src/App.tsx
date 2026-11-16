@@ -25,7 +25,6 @@ import {
   ScanText,
   MousePointer2,
   Info,
-  Layers,
 } from 'lucide-react';
 
 import { pdfjs, exportRedactedPdf, downloadBlob } from './lib/pdf';
@@ -38,25 +37,6 @@ const clamp = (v: number, min: number, max: number) =>
 
 const generateId = () =>
   `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-
-const TEMPLATE_KEY = 'pdf-redactor-templates-v1';
-
-interface Template {
-  id: string;
-  name: string;
-  ptW: number;
-  ptH: number;
-  rects: {
-    pageIndex: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    category: string;
-  }[];
-  watermark?: string;
-  createdAt: number;
-}
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -83,7 +63,6 @@ export default function App() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [toast, setToast] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [templates, setTemplates] = useState<Template[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -91,24 +70,6 @@ export default function App() {
   const startPosRef = useRef<{ x: number; y: number } | null>(null);
   const fitKeyRef = useRef('');
   const toastTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(TEMPLATE_KEY);
-      if (raw) setTemplates(JSON.parse(raw));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const persistTemplates = useCallback((next: Template[]) => {
-    setTemplates(next);
-    try {
-      localStorage.setItem(TEMPLATE_KEY, JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-  }, []);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -230,60 +191,6 @@ export default function App() {
     setRedactions([]);
     setDetections([]);
     showToast('已清除全部遮蔽');
-  };
-
-  /* ---------------- 遮蔽範本（掃描件專用：同版型重複使用） ---------------- */
-
-  const saveTemplate = () => {
-    if (!file) return;
-    if (!redactions.length) {
-      showToast('還沒有任何遮蔽可以存成範本');
-      return;
-    }
-    const name = window.prompt(
-      '範本名稱（例如：XX報關行 進口報單）',
-      file.name.replace(/\.pdf$/i, '').slice(0, 20)
-    );
-    if (!name) return;
-    const t: Template = {
-      id: generateId(),
-      name: name.trim(),
-      ptW: Math.round(pagePt.w),
-      ptH: Math.round(pagePt.h),
-      rects: redactions.map((r) => ({
-        pageIndex: r.pageIndex,
-        x: r.x,
-        y: r.y,
-        width: r.width,
-        height: r.height,
-        category: r.category,
-      })),
-      watermark: watermarkText || undefined,
-      createdAt: Date.now(),
-    };
-    persistTemplates([...templates, t]);
-    showToast(`已存成範本「${t.name}」`);
-  };
-
-  const applyTemplate = (t: Template) => {
-    if (!file) return;
-    const dw = Math.abs(t.ptW - pagePt.w) / (t.ptW || 1);
-    const dh = Math.abs(t.ptH - pagePt.h) / (t.ptH || 1);
-    setRedactions(
-      t.rects.map((r) => ({ ...r, id: generateId(), confidence: 'medium' as const }))
-    );
-    setDetections([]);
-    if (t.watermark) setWatermarkText(t.watermark);
-    if (dw > 0.05 || dh > 0.05) {
-      showToast('頁面尺寸與範本不同，框線可能位移，請檢查');
-    } else {
-      showToast(`已套用範本「${t.name}」，共 ${t.rects.length} 處`);
-    }
-    setPanelOpen(false);
-  };
-
-  const deleteTemplate = (id: string) => {
-    persistTemplates(templates.filter((t) => t.id !== id));
   };
 
   /* ---------------- 自動偵測（本地規則引擎） ---------------- */
@@ -495,53 +402,6 @@ export default function App() {
               </p>
             </section>
 
-            {/* 遮蔽範本 */}
-            <section className="space-y-2">
-              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5" /> 遮蔽範本
-              </h2>
-              <p className="text-[10px] font-bold text-slate-400 px-1 leading-relaxed">
-                掃描件沒有文字層，無法自動辨識。同一版型的報單框一次存起來，下次一鍵套用。
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={saveTemplate}
-                  className="flex-1 rounded-xl px-3 py-2.5 text-xs font-black bg-slate-900 text-white active:scale-[0.98] transition-all"
-                >
-                  存成範本
-                </button>
-              </div>
-              {templates.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  {templates.map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2"
-                    >
-                      <button
-                        onClick={() => applyTemplate(t)}
-                        className="flex-1 text-left min-w-0"
-                      >
-                        <div className="text-[11px] font-black text-slate-700 truncate">
-                          {t.name}
-                        </div>
-                        <div className="text-[9px] font-bold text-slate-400">
-                          {t.rects.length} 處 · {t.ptW}×{t.ptH}
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => deleteTemplate(t.id)}
-                        className="text-slate-300 hover:text-rose-500 p-1"
-                        aria-label="刪除範本"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
             {/* 自動偵測 */}
             <section className="space-y-2">
               <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -640,8 +500,6 @@ export default function App() {
                 </p>
               )}
             </section>
-
-            
           </>
         )}
       </div>
