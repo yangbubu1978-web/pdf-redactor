@@ -92,30 +92,30 @@ export const RULES: DetectRule[] = [
 
   // 帶分隔的 4-4-4-4 幾乎只能是卡號
   { category: '信用卡號', riskLevel: 'HIGH', priority: 96, confidence: 'high',
-    pattern: /\b(?:\d{4}[ -]){3}\d{4}\b/g },
+    pattern: /(?<!\d)(?:\d{4}[ -]){3}\d{4}(?!\d)/g },
 
   // 連續 16 碼沒有分隔 → 可能是卡號也可能是帳號，需上下文
   { category: '信用卡號', riskLevel: 'HIGH', priority: 70, confidence: 'medium',
-    pattern: /\b\d{16}\b/g, require: CARD_WORDS },
+    pattern: /(?<!\d)\d{16}(?!\d)/g, require: CARD_WORDS },
 
   // 市話必須有分隔符或有電話字樣
   { category: '市話號碼', riskLevel: 'MEDIUM', priority: 90, confidence: 'high',
     pattern: /\(?0[2-8]\)?[ -]\d{3,4}[ -]\d{4}/g },
 
   { category: '市話號碼', riskLevel: 'MEDIUM', priority: 60, confidence: 'medium',
-    pattern: /\b0[2-8]\d{6,8}\b/g, require: PHONE_WORDS },
+    pattern: /(?<!\d)0[2-8]\d{6,8}(?!\d)/g, require: PHONE_WORDS },
 
   // 銀行帳號：一定要有帳號/匯款/銀行等字樣
   { category: '銀行帳號', riskLevel: 'HIGH', priority: 85, confidence: 'medium',
-    pattern: /\b\d{10,16}\b/g, require: ACCOUNT_WORDS, window: 40 },
+    pattern: /(?<!\d)\d{10,16}(?!\d)/g, require: ACCOUNT_WORDS, window: 40 },
 
   // 統編：一定要有統編字樣，否則任何 8 位數字都會中
   { category: '統一編號', riskLevel: 'MEDIUM', priority: 75, confidence: 'medium',
-    pattern: /\b\d{8}\b/g, require: TAX_ID_WORDS, window: 40 },
+    pattern: /(?<!\d)\d{8}(?!\d)/g, require: TAX_ID_WORDS, window: 40 },
 
   // 日期：只有跟生日/到職等字樣相鄰才抓
   { category: '出生日期', riskLevel: 'MEDIUM', priority: 65, confidence: 'medium',
-    pattern: /\b(?:19|20)\d{2}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/g, require: DATE_WORDS, window: 24 },
+    pattern: /(?<!\d)(?:19|20)\d{2}[\/.\-]\d{1,2}[\/.\-]\d{1,2}(?!\d)/g, require: DATE_WORDS, window: 24 },
 
   // 姓名：靠「姓名：」「聯絡人：」這類標籤抓
   { category: '姓名', riskLevel: 'MEDIUM', priority: 72, confidence: 'medium',
@@ -124,7 +124,12 @@ export const RULES: DetectRule[] = [
 
   // 金額：幣別代碼／中文幣別 + 數字（報關最常見寫法：USD 850.00、美金 12,500）
   { category: '金額', riskLevel: 'HIGH', priority: 82, confidence: 'high',
-    pattern: /(?:USD|US\$|TWD|NT\$|CNY|RMB|EUR|JPY|HKD|GBP|AUD|VND|THB|KRW|SGD|MYR|CAD|美金|美元|台幣|新台幣|人民幣|日幣|日圓|歐元|港幣|英鎊|越南盾|泰銖|韓元|澳幣|加幣)[ ]?\$?[ ]?\d[\d,]*(?:\.\d+)?/gi },
+    pattern: /(?:USD|US\$|TWD|NT\$|CNY|RMB|EUR|JPY|HKD|GBP|AUD|VND|THB|KRW|SGD|MYR|CAD|美金|美元|台幣|新台幣|人民幣|日幣|日圓|歐元|港幣|英鎊|越南盾|泰銖|韓元|澳幣|加幣)[ ]?\$?[ ]?(\d[\d,]*(?:\.\d+)?)/gi, captureGroup: 1, rejectAfter: UNITS },
+
+  // 金額：純整數費用（例：推廣貿易服務費 148），只抓緊跟在費用名稱後面的數字
+  { category: '金額', riskLevel: 'MEDIUM', priority: 58, confidence: 'medium',
+    pattern: /(?:推\s*廣\s*貿\s*易\s*服\s*務\s*費|滯\s*納\s*金|手\s*續\s*費|代\s*辦\s*費|服\s*務\s*費)[^0-9]{0,6}(\d{1,6})(?!\d)(?!%)/g,
+    captureGroup: 1, rejectAfter: ['%'] },
 
   // 金額：有幣別符號就直接抓
   { category: '金額', riskLevel: 'MEDIUM', priority: 80, confidence: 'high',
@@ -136,11 +141,11 @@ export const RULES: DetectRule[] = [
 
   // 金額：帶兩位小數（報關常見 850.00、10.42），需金額字樣在附近
   { category: '金額', riskLevel: 'MEDIUM', priority: 62, confidence: 'medium',
-    pattern: /\b\d{1,3}(?:,\d{3})*\.\d{2}\b/g, require: AMOUNT_WORDS, window: 40, rejectAfter: UNITS, exclude: QTY_WORDS },
+    pattern: /(?<!\d)\d{1,3}(?:,\d{3})*\.\d{2}(?!\d)/g, require: AMOUNT_WORDS, window: 40, rejectAfter: UNITS, exclude: QTY_WORDS },
 
   // 金額：純千分位數字，需要金額相關字樣在附近
   { category: '金額', riskLevel: 'MEDIUM', priority: 66, confidence: 'medium',
-    pattern: /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b/g, require: AMOUNT_WORDS, scope: 'page', rejectAfter: UNITS, exclude: QTY_WORDS, window: 12 },
+    pattern: /(?<!\d)\d{1,3}(?:,\d{3})+(?:\.\d+)?(?!\d)/g, require: AMOUNT_WORDS, scope: 'page', rejectAfter: UNITS, exclude: QTY_WORDS, window: 26 },
 
   // 報關／貿易：報單號碼（例 AA/12/123/A1234、第 AA 12 123 A1234 號）
   { category: '報單號碼', riskLevel: 'HIGH', priority: 88, confidence: 'high',
@@ -153,7 +158,7 @@ export const RULES: DetectRule[] = [
 
   // 匯率：需要「匯率」字樣在附近
   { category: '匯率', riskLevel: 'MEDIUM', priority: 64, confidence: 'medium',
-    pattern: /\b\d{1,3}\.\d{2,4}\b/g, require: ['匯率', '匯價', '兌換率', 'Rate'], window: 16 },
+    pattern: /(?<!\d)\d{1,3}\.\d{2,4}(?!\d)/g, require: ['匯率', '匯價', '兌換率', 'Rate'], window: 16 },
 
   // 地址：格式夠獨特，直接抓
   { category: '地址', riskLevel: 'LOW', priority: 50, confidence: 'high',
@@ -286,7 +291,9 @@ function findHits(fullText: string): RawHit[] {
           .slice(end, Math.min(fullText.length, end + 8))
           .trimStart()
           .toUpperCase();
-        if (rule.rejectAfter.some((u) => tail.startsWith(u.toUpperCase())))
+        // 「1,500.00BOX」這種數字與單位黏在一起的情況：去掉小數段後若直接接單位就排除
+        const noDec = tail.replace(/^\.\d+/, '');
+        if (rule.rejectAfter.some((u) => noDec.startsWith(u.toUpperCase())))
           continue;
       }
 
@@ -391,13 +398,15 @@ export function detectPage(
   const charMap: CharMap[] = [];
   let fullText = '';
 
+  let lastIdx = -1;
   items.forEach((item, itemIdx) => {
     const str = item.str ?? '';
     if (!str) return;
     if (fullText.length > 0) {
       // 判斷是否需要插入分隔空白。對中日韓文字直接串接（PDF 常逐字切開），
       // 拉丁/數字只在水平間距明顯時補空白，避免把同一串數字斷開。
-      const prev = items[itemIdx - 1];
+      // 注意：要取「上一個有內容的 item」，PDF 常見空字串 item 夾在中間。
+      const prev = lastIdx >= 0 ? items[lastIdx] : undefined;
       const tr = item.transform;
       const ptr = prev?.transform;
       const gap =
@@ -412,7 +421,10 @@ export function detectPage(
       // 不強制插換行：PDF 匯出工具常把同一欄位拆成多個 item，
       // 硬切行會讓「標籤 + 數值」配不起來而整批漏抓。
       // 只有在水平間距明顯時補一個空白，避免數字串被黏在一起。
-      if (!cjkJoin && gap > lineH * 0.5) {
+      const prevEndsDigit = /\d$/.test(prevLast);
+      const curStartsDigit = /^\d/.test(curFirst);
+      const digitJoin = !cjkJoin && prevEndsDigit && curStartsDigit;
+      if (digitJoin || (!cjkJoin && gap > lineH * 0.5)) {
         charMap.push({ itemIdx, charIdx: -1 });
         fullText += CHAR_SPACE;
       }
@@ -421,6 +433,7 @@ export function detectPage(
       charMap.push({ itemIdx, charIdx: i });
     }
     fullText += str;
+    lastIdx = itemIdx;
   });
 
   if (!fullText.trim()) return [];
