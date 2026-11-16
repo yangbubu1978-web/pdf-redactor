@@ -85,19 +85,19 @@ export const RULES: DetectRule[] = [
 
   // 銀行帳號：一定要有帳號/匯款/銀行等字樣
   { category: '銀行帳號', riskLevel: 'HIGH', priority: 85, confidence: 'medium',
-    pattern: /\b\d{10,16}\b/g, require: ACCOUNT_WORDS, window: 25 },
+    pattern: /\b\d{10,16}\b/g, require: ACCOUNT_WORDS, window: 40 },
 
   // 統編：一定要有統編字樣，否則任何 8 位數字都會中
   { category: '統一編號', riskLevel: 'MEDIUM', priority: 75, confidence: 'medium',
-    pattern: /\b\d{8}\b/g, require: TAX_ID_WORDS, window: 25 },
+    pattern: /\b\d{8}\b/g, require: TAX_ID_WORDS, window: 40 },
 
   // 日期：只有跟生日/到職等字樣相鄰才抓
   { category: '出生日期', riskLevel: 'MEDIUM', priority: 65, confidence: 'medium',
-    pattern: /\b(?:19|20)\d{2}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/g, require: DATE_WORDS, window: 14 },
+    pattern: /\b(?:19|20)\d{2}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/g, require: DATE_WORDS, window: 24 },
 
   // 姓名：靠「姓名：」「聯絡人：」這類標籤抓
   { category: '姓名', riskLevel: 'MEDIUM', priority: 72, confidence: 'medium',
-    pattern: /(?:姓名|名字|聯絡人|連絡人|申請人|填表人|收件人|寄件人|負責人|員工姓名|客戶名稱|承辦人|經辦人|處理人)[：: ]{0,4}([\u4e00-\u9fa5]{2,4})(?![ \u4e00-\u9fa5])/g,
+    pattern: /(?:姓名|名字|聯絡人|連絡人|申請人|填表人|收件人|寄件人|負責人|員工姓名|客戶名稱|承辦人|經辦人|處理人)[：: ]{0,4}([\u4e00-\u9fa5]{2,4})/g,
     captureGroup: 1 },
 
   // 金額：有幣別符號就直接抓
@@ -118,8 +118,8 @@ export const RULES: DetectRule[] = [
 ];
 
 /** 上下文視窗：往前 30 字、往後 18 字 */
-const CTX_BEFORE = 30;
-const CTX_AFTER = 18;
+const CTX_BEFORE = 60;
+const CTX_AFTER = 25;
 
 const CHAR_SPACE = ' ';
 const isCJKChar = (s: string) => /[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/.test(s);
@@ -203,6 +203,14 @@ function findHits(fullText: string): RawHit[] {
         text = m[rule.captureGroup];
         const at = raw.indexOf(text);
         offset = at >= 0 ? at : 0;
+      }
+      // 姓名欄位沒有結束符號，貪婪比對常會吃到下一個欄位名的第一個字
+      // （例：「姓名：王大明」+「單價」→「王大明單」），用停用字截掉。
+      if (rule.captureGroup != null) {
+        const STOP = '單價電信統合總金數地備附說日簽職部傳手身姓聯申填收寄負承經處年月時分';
+        while (text.length > 2 && STOP.includes(text[text.length - 1])) {
+          text = text.slice(0, -1);
+        }
       }
       if (!text.trim()) continue;
       if (!/[\dA-Za-z\u4e00-\u9fa5]/.test(text)) continue;
@@ -347,16 +355,10 @@ export function detectPage(
       const curFirst = str[0] ?? '';
       const cjkJoin = isCJKChar(prevLast) || isCJKChar(curFirst);
 
-      // y 明顯改變 → 換行，保留行結構（避免跨行的假匹配，也讓規則能判斷行界）
-      const prevY = ptr && ptr.length >= 6 ? ptr[5] : null;
-      const curY = tr && tr.length >= 6 ? tr[5] : null;
-      const newLine =
-        prevY != null && curY != null && Math.abs(curY - prevY) > lineH * 1.2;
-
-      if (newLine) {
-        charMap.push({ itemIdx, charIdx: -1 });
-        fullText += '\n';
-      } else if (!cjkJoin && gap > lineH * 0.5) {
+      // 不強制插換行：PDF 匯出工具常把同一欄位拆成多個 item，
+      // 硬切行會讓「標籤 + 數值」配不起來而整批漏抓。
+      // 只有在水平間距明顯時補一個空白，避免數字串被黏在一起。
+      if (!cjkJoin && gap > lineH * 0.5) {
         charMap.push({ itemIdx, charIdx: -1 });
         fullText += CHAR_SPACE;
       }
