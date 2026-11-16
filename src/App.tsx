@@ -332,7 +332,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-5 pb-10 space-y-5">
         {/* 上傳 */}
         <section>
           <input
