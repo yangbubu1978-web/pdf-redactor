@@ -37,7 +37,8 @@ const AMOUNT_WORDS = [
   '營業稅', '稅額', '稅金', '佣金', '利潤', '毛利', '淨利', '折扣',
   'FOB', 'CIF', 'CFR', 'C&F', 'EXW', 'DDP', 'DAP', '離岸', '到岸',
   '金額合計', '總金額', '小計金額', '未稅', '含稅',
-  '完稅價格', '離岸價格', '到岸價格', '發票金額', '申報金額', '應付金額', '實付金額',
+  '完稅價格', '離岸價格', '到岸價格', '起岸價格', '發票金額', '申報金額', '應付金額', '實付金額',
+  '進口稅', '推廣貿易服務費', '稅費合計', '營業稅稅基', '滯納金', '貨物稅',
 ];
 
 const PHONE_WORDS = [
@@ -58,8 +59,15 @@ const DATE_WORDS = [
 ];
 
 const UNITS = [
-  'KG', 'KGS', 'PCS', 'CTN', 'SET', 'BOX', 'MT', 'G',
-  '公斤', '公克', '公噸', '噸', '件', '箱', '個', '台', '組', '只', '支', '包', '袋', '片',
+  'KG', 'KGS', 'KGM', 'PCS', 'PCE', 'CTN', 'SET', 'BOX', 'BOT', 'MT', 'G',
+  'LTR', 'L', 'ML', 'M2', 'M3', 'DOZ',
+  '公斤', '公克', '公噸', '噸', '件', '箱', '個', '台', '組', '只', '支', '包', '袋', '片', '瓶', '罐', '盒',
+];
+
+/** 重量／數量欄位：這些欄位的數字不是金額，不該遮蔽 */
+const QTY_WORDS = [
+  '毛重', '淨重', '重量', '數量', '件數', '包裝', '體積', '容積',
+  '總件數', '統計用數量',
 ];
 
 const CARD_WORDS = ['卡號', '信用卡', 'VISA', 'Master', 'MASTER', '簽帳', '金融卡'];
@@ -128,11 +136,11 @@ export const RULES: DetectRule[] = [
 
   // 金額：帶兩位小數（報關常見 850.00、10.42），需金額字樣在附近
   { category: '金額', riskLevel: 'MEDIUM', priority: 62, confidence: 'medium',
-    pattern: /\b\d{1,3}(?:,\d{3})*\.\d{2}\b/g, require: AMOUNT_WORDS, window: 40, rejectAfter: UNITS },
+    pattern: /\b\d{1,3}(?:,\d{3})*\.\d{2}\b/g, require: AMOUNT_WORDS, window: 40, rejectAfter: UNITS, exclude: QTY_WORDS },
 
   // 金額：純千分位數字，需要金額相關字樣在附近
   { category: '金額', riskLevel: 'MEDIUM', priority: 66, confidence: 'medium',
-    pattern: /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b/g, require: AMOUNT_WORDS, scope: 'page', rejectAfter: UNITS },
+    pattern: /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b/g, require: AMOUNT_WORDS, scope: 'page', rejectAfter: UNITS, exclude: QTY_WORDS, window: 12 },
 
   // 報關／貿易：報單號碼（例 AA/12/123/A1234、第 AA 12 123 A1234 號）
   { category: '報單號碼', riskLevel: 'HIGH', priority: 88, confidence: 'high',
@@ -267,7 +275,8 @@ function findHits(fullText: string): RawHit[] {
           rule.scope === 'page' ? fullText : beforeText + afterText;
         if (rule.require && !rule.require.some((k) => scopeText.includes(k)))
           continue;
-        if (rule.exclude && rule.exclude.some((k) => scopeText.includes(k)))
+        // exclude 一律只看附近（不能看整頁，否則整頁出現「數量」就把金額全殺光）
+        if (rule.exclude && rule.exclude.some((k) => beforeText.includes(k)))
           continue;
       }
 

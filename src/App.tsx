@@ -378,6 +378,30 @@ export default function App() {
 
         {file && (
           <>
+            {/* 框選模式 */}
+            <section className="space-y-2">
+              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <MousePointer2 className="w-3.5 h-3.5" /> 手動遮蔽（可先框重點）
+              </h2>
+              <button
+                onClick={() => {
+                  setMarkMode((v) => !v);
+                  setPanelOpen(false);
+                }}
+                className={`w-full rounded-xl px-4 py-3 text-sm font-black transition-all flex items-center justify-center gap-2 ${
+                  markMode
+                    ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30'
+                    : 'bg-white text-slate-700 border border-slate-200'
+                }`}
+              >
+                <MousePointer2 className="w-4 h-4" />
+                {markMode ? '框選模式：開（可拖曳）' : '開啟框選模式'}
+              </button>
+              <p className="text-[10px] font-bold text-slate-400 px-1">
+                關閉時可正常滑動／捲動頁面
+              </p>
+            </section>
+
             {/* 自動偵測 */}
             <section className="space-y-2">
               <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -436,30 +460,6 @@ export default function App() {
                   ))}
                 </div>
               )}
-            </section>
-
-            {/* 框選模式 */}
-            <section className="space-y-2">
-              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                <MousePointer2 className="w-3.5 h-3.5" /> 手動遮蔽
-              </h2>
-              <button
-                onClick={() => {
-                  setMarkMode((v) => !v);
-                  setPanelOpen(false);
-                }}
-                className={`w-full rounded-xl px-4 py-3 text-sm font-black transition-all flex items-center justify-center gap-2 ${
-                  markMode
-                    ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30'
-                    : 'bg-white text-slate-700 border border-slate-200'
-                }`}
-              >
-                <MousePointer2 className="w-4 h-4" />
-                {markMode ? '框選模式：開（可拖曳）' : '開啟框選模式'}
-              </button>
-              <p className="text-[10px] font-bold text-slate-400 px-1">
-                關閉時可正常滑動／捲動頁面
-              </p>
             </section>
 
             {/* 浮水印 */}
