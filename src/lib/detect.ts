@@ -21,14 +21,23 @@ export interface DetectRule {
   scope?: 'local' | 'page';
   /** 是否也往後找關鍵字（預設否） */
   scanAfter?: boolean;
+  /** 命中後若緊接這些單位詞就丟棄（避免把數量、重量當金額） */
+  rejectAfter?: string[];
   /** 沒有上下文也能命中 → high；需要上下文 → medium */
   confidence: Confidence;
 }
 
 const AMOUNT_WORDS = [
+  // 一般帳務
   '金額', '薪資', '薪水', '價', '費', '合計', '總計', '小計', '單價',
   '本薪', '撥款', '匯款', '收入', '支出', '應付', '實付', '稅', '扣款',
   '加班', '獎金', '津貼', '補助', '保費', '給付', '報酬',
+  // 報關 / 貿易
+  '成本', '總價', '報價', '貨款', '價款', '運費', '保險費', '關稅',
+  '營業稅', '稅額', '稅金', '佣金', '利潤', '毛利', '淨利', '折扣',
+  'FOB', 'CIF', 'CFR', 'C&F', 'EXW', 'DDP', 'DAP', '離岸', '到岸',
+  '金額合計', '總金額', '小計金額', '未稅', '含稅',
+  '完稅價格', '離岸價格', '到岸價格', '發票金額', '申報金額', '應付金額', '實付金額',
 ];
 
 const PHONE_WORDS = [
@@ -46,6 +55,11 @@ const TAX_ID_WORDS = ['統編', '統一編號', '營業人', '營利事業', '�
 const DATE_WORDS = [
   '生日', '出生', '到職', '入職', '年資', '結婚', '發證', '有效',
   '生效', '離職', '報到',
+];
+
+const UNITS = [
+  'KG', 'KGS', 'PCS', 'CTN', 'SET', 'BOX', 'MT', 'G',
+  '公斤', '公克', '公噸', '噸', '件', '箱', '個', '台', '組', '只', '支', '包', '袋', '片',
 ];
 
 const CARD_WORDS = ['卡號', '信用卡', 'VISA', 'Master', 'MASTER', '簽帳', '金融卡'];
@@ -100,17 +114,38 @@ export const RULES: DetectRule[] = [
     pattern: /(?:姓名|名字|聯絡人|連絡人|申請人|填表人|收件人|寄件人|負責人|員工姓名|客戶名稱|承辦人|經辦人|處理人)[：: ]{0,4}([\u4e00-\u9fa5]{2,4})/g,
     captureGroup: 1 },
 
+  // 金額：幣別代碼／中文幣別 + 數字（報關最常見寫法：USD 850.00、美金 12,500）
+  { category: '金額', riskLevel: 'HIGH', priority: 82, confidence: 'high',
+    pattern: /(?:USD|US\$|TWD|NT\$|CNY|RMB|EUR|JPY|HKD|GBP|AUD|VND|THB|KRW|SGD|MYR|CAD|美金|美元|台幣|新台幣|人民幣|日幣|日圓|歐元|港幣|英鎊|越南盾|泰銖|韓元|澳幣|加幣)[ ]?\$?[ ]?\d[\d,]*(?:\.\d+)?/gi },
+
   // 金額：有幣別符號就直接抓
   { category: '金額', riskLevel: 'MEDIUM', priority: 80, confidence: 'high',
-    pattern: /(?:NT\$|N\$|＄|\$)[ ]?\d{1,3}(?:,\d{3})*(?:\.\d+)?/g },
+    pattern: /(?:NT\$|N\$|＄|\$)[ ]?\d{1,3}(?:,\d{3})*(?:\.\d+)?/g, rejectAfter: UNITS },
 
   // 金額：有「元」字結尾
   { category: '金額', riskLevel: 'MEDIUM', priority: 78, confidence: 'high',
-    pattern: /\d[\d,]*(?:\.\d+)?[ ]?元/g },
+    pattern: /\d[\d,]*(?:\.\d+)?[ ]?元/g, rejectAfter: UNITS },
+
+  // 金額：帶兩位小數（報關常見 850.00、10.42），需金額字樣在附近
+  { category: '金額', riskLevel: 'MEDIUM', priority: 62, confidence: 'medium',
+    pattern: /\b\d{1,3}(?:,\d{3})*\.\d{2}\b/g, require: AMOUNT_WORDS, window: 40, rejectAfter: UNITS },
 
   // 金額：純千分位數字，需要金額相關字樣在附近
   { category: '金額', riskLevel: 'MEDIUM', priority: 66, confidence: 'medium',
-    pattern: /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b/g, require: AMOUNT_WORDS, scope: 'page' },
+    pattern: /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b/g, require: AMOUNT_WORDS, scope: 'page', rejectAfter: UNITS },
+
+  // 報關／貿易：報單號碼（例 AA/12/123/A1234、第 AA 12 123 A1234 號）
+  { category: '報單號碼', riskLevel: 'HIGH', priority: 88, confidence: 'high',
+    pattern: /\b[A-Z]{2}\s?[\/\-]?\s?\d{2}\s?[\/\-]?\s?\d{3}\s?[\/\-]?\s?[A-Z]?\d{4}\b/g },
+
+  // 報關／貿易：提單號碼（B/L、BL、Bill of Lading 後面的英數）
+  { category: '提單號碼', riskLevel: 'HIGH', priority: 86, confidence: 'high',
+    pattern: /(?:B\/L|BL|BILL\s*OF\s*LADING|提單)[：:#\s]*([A-Z0-9][A-Z0-9\-]{5,20})/gi,
+    captureGroup: 1 },
+
+  // 匯率：需要「匯率」字樣在附近
+  { category: '匯率', riskLevel: 'MEDIUM', priority: 64, confidence: 'medium',
+    pattern: /\b\d{1,3}\.\d{2,4}\b/g, require: ['匯率', '匯價', '兌換率', 'Rate'], window: 16 },
 
   // 地址：格式夠獨特，直接抓
   { category: '地址', riskLevel: 'LOW', priority: 50, confidence: 'high',
@@ -233,6 +268,16 @@ function findHits(fullText: string): RawHit[] {
         if (rule.require && !rule.require.some((k) => scopeText.includes(k)))
           continue;
         if (rule.exclude && rule.exclude.some((k) => scopeText.includes(k)))
+          continue;
+      }
+
+      // 數字後面緊接單位（KG、PCS、件…）→ 是數量／重量，不是金額
+      if (rule.rejectAfter) {
+        const tail = fullText
+          .slice(end, Math.min(fullText.length, end + 8))
+          .trimStart()
+          .toUpperCase();
+        if (rule.rejectAfter.some((u) => tail.startsWith(u.toUpperCase())))
           continue;
       }
 
@@ -528,6 +573,9 @@ export function categoryColor(category: string): string {
     金額: '#f59e0b',
     統一編號: '#059669',
     姓名: '#7c3aed',
+    報單號碼: '#b91c1c',
+    提單號碼: '#b91c1c',
+    匯率: '#0891b2',
     地址: '#64748b',
     手動: '#111827',
   };
