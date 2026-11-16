@@ -160,6 +160,10 @@ export const RULES: DetectRule[] = [
   { category: '匯率', riskLevel: 'MEDIUM', priority: 64, confidence: 'medium',
     pattern: /(?<!\d)\d{1,3}\.\d{2,4}(?!\d)/g, require: ['匯率', '匯價', '兌換率', 'Rate'], window: 16 },
 
+  // 稅率／費率百分比（報關單的進口稅率、貨物稅率）
+  { category: '稅率', riskLevel: 'MEDIUM', priority: 68, confidence: 'high',
+    pattern: /(?<!\d)\d{1,3}(?:\.\d+)?[ ]?%(?!\d)/g },
+
   // 地址：格式夠獨特，直接抓
   { category: '地址', riskLevel: 'LOW', priority: 50, confidence: 'high',
     pattern: /[\u4e00-\u9fa5]{2,4}(?:市|縣)[\u4e00-\u9fa5]{1,4}(?:區|鄉|鎮|市)[^\n]{2,30}/g },
@@ -478,9 +482,143 @@ export function detectPage(
     }
   }
 
+  // 表格欄位推斷：單價／金額欄（純整數單價通常沒有千分位，靠表頭對齊抓）
+  out.push(...detectPriceColumn(items, viewport, pageIndex, out));
+
   // 表格欄位推斷：姓名沒有格式可循，靠「姓名」表頭對齊下方欄位
   out.push(...detectTableNames(items, viewport, pageIndex, out));
 
+  return out;
+}
+
+/** 把同一水平線上的 item 併成一行文字（PDF 常把「單」「價」拆開） */
+function buildRows(items: PdfTextItem[]) {
+  const list = items
+    .filter((i) => (i.str ?? '').trim() && i.transform)
+    .map((i) => ({
+      x: i.transform![4],
+      y: i.transform![5],
+      w: i.width ?? 0,
+      h: Math.abs(i.height || i.transform![3] || 10),
+      s: (i.str ?? '').trim(),
+    }))
+    .sort((a, b) => b.y - a.y || a.x - b.x);
+
+  const rows: { y: number; text: string; x1: number; x2: number; h: number }[] = [];
+  let cur: typeof list = [];
+  let curY = Number.NaN;
+  const flush = () => {
+    if (!cur.length) return;
+    cur.sort((a, b) => a.x - b.x);
+    let text = '';
+    let lastX2: number | null = null;
+    let x1 = Infinity;
+    let x2 = -Infinity;
+    let h = 10;
+    for (const p of cur) {
+      if (lastX2 != null && p.x - lastX2 > 12) text += ' ';
+      text += p.s;
+      x1 = Math.min(x1, p.x);
+      x2 = Math.max(x2, p.x + p.w);
+      lastX2 = p.x + p.w;
+      h = Math.max(h, p.h);
+    }
+    rows.push({ y: curY, text, x1, x2, h });
+    cur = [];
+  };
+  for (const it of list) {
+    if (Number.isNaN(curY) || Math.abs(it.y - curY) > 4) {
+      flush();
+      curY = it.y;
+    }
+    cur.push(it);
+  }
+  flush();
+  return rows;
+}
+
+const PRICE_HEADER = /(單價|單\s*價).{0,12}(金額|條件|幣別)?/;
+
+/** 從「單價／金額」表頭往下對齊，抓純整數的單價（例：CIF THB 256） */
+function detectPriceColumn(
+  items: PdfTextItem[],
+  viewport: AnyViewport,
+  pageIndex: number,
+  existing: Detection[]
+): Detection[] {
+  type Hd = { x1: number; x2: number; y: number };
+  const headers: Hd[] = [];
+
+  // 報單的「單價」表頭常是豎排（「單」在上、「價」在下）
+  const chars = items
+    .filter((i) => (i.str ?? '').trim() && i.transform)
+    .map((i) => ({
+      t: (i.str ?? '').trim(),
+      x: i.transform![4],
+      y: i.transform![5],
+      w: i.width ?? 0,
+      it: i,
+    }));
+  const singles = chars.filter((c) => c.t === '單');
+  const prices = chars.filter((c) => c.t === '價');
+  for (const sn of singles) {
+    const pr = prices.find(
+      (p) => p !== sn && Math.abs(p.x - sn.x) < 8 && sn.y - p.y > 0 && sn.y - p.y < 45
+    );
+    if (pr) {
+      headers.push({
+        x1: Math.min(sn.x, pr.x),
+        x2: Math.max(sn.x + sn.w, pr.x + pr.w) + 40,
+        y: Math.max(sn.y, pr.y) + 8,
+      });
+    }
+  }
+  // 水平排列的「單價」也支援
+  for (const r of buildRows(items)) {
+    if (/單\s*價/.test(r.text)) headers.push({ x1: r.x1, x2: r.x2 + 40, y: r.y });
+  }
+
+  if (!headers.length) return [];
+
+  const out: Detection[] = [];
+  items.forEach((it) => {
+    const raw = (it.str ?? '').trim();
+    if (!raw || !it.transform) return;
+    // 只接受純數字（可含逗號、小數），排除 1,500.00BOX 這種帶單位的
+    if (!/^\d[\d,]*(?:\.\d+)?$/.test(raw)) return;
+    if (raw.length < 1) return;
+
+    const x = it.transform[4];
+    const cx = x + (it.width ?? 0) / 2;
+    const y = it.transform[5];
+
+    for (const hd of headers) {
+      const below = y < hd.y - 2 && y > hd.y - 420;
+      const withinX = cx >= hd.x1 - 10 && cx <= hd.x1 + 95;
+      if (!below || !withinX) continue;
+
+      const r = itemRect(it, 0, raw.length, viewport);
+      if (!r) continue;
+      const dup = existing.some(
+        (d) =>
+          d.pageIndex === pageIndex &&
+          Math.abs(d.rect.y - r.y) < 0.01 &&
+          Math.abs(d.rect.x - r.x) < 0.02
+      );
+      if (dup) continue;
+
+      out.push({
+        id: nextId(),
+        category: '金額',
+        text: raw,
+        riskLevel: 'MEDIUM',
+        confidence: 'medium',
+        pageIndex,
+        rect: r,
+      });
+      break;
+    }
+  });
   return out;
 }
 
@@ -598,6 +736,7 @@ export function categoryColor(category: string): string {
     報單號碼: '#b91c1c',
     提單號碼: '#b91c1c',
     匯率: '#0891b2',
+    稅率: '#c2410c',
     地址: '#64748b',
     手動: '#111827',
   };
