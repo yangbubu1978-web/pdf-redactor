@@ -27,10 +27,18 @@ function drawWatermark(
 ) {
   if (!text.trim()) return;
   const content = text.trim();
-  // 字級自適應：讓旋轉 45° 後仍在頁面內
-  const byWidth = w / (content.length * 0.72);
-  const byHeight = h * 0.22;
-  const fontSize = Math.max(14, Math.min(byWidth, byHeight));
+  // 以實際字寬量測，確保旋轉 45° 後完整落在頁面內（不被裁切）
+  // 旋轉後 bounding 寬 ≈ (文字寬 + 字高) * 0.707，故可用長度 ≈ 1.414*min(w,h) - 字高
+  let fontSize = Math.max(14, Math.min(h * 0.18, w * 0.4));
+  ctx.save();
+  ctx.font = `900 ${fontSize}px "Noto Sans TC", system-ui, sans-serif`;
+  const measured = ctx.measureText(content).width || 1;
+  const limit =
+    (Math.SQRT2 * Math.min(w, h) - fontSize) * 0.92;
+  if (measured > limit) {
+    fontSize = Math.max(10, fontSize * (limit / measured));
+  }
+  ctx.restore();
 
   ctx.save();
   ctx.translate(w / 2, h / 2);
@@ -40,7 +48,7 @@ function drawWatermark(
   ctx.font = `900 ${fontSize}px "Noto Sans TC", system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(content, 0, 0, w * 1.3);
+  ctx.fillText(content, 0, 0);
   ctx.restore();
 }
 
@@ -53,15 +61,12 @@ export async function exportRedactedPdf(opts: ExportOptions): Promise<Blob> {
   const { file, redactions, watermarkText, renderScale = 2, onProgress } = opts;
 
   const buffer = await file.arrayBuffer();
-  console.log('[export] buffer', buffer.byteLength);
   const pdf = await pdfjs.getDocument({ data: buffer }).promise;
-  console.log('[export] doc loaded', pdf.numPages);
   const outDoc = await PDFDocument.create();
 
   try {
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p);
-      console.log('[export] page', p);
       const vp = page.getViewport({ scale: renderScale });
       const ptViewport = page.getViewport({ scale: 1 });
 
@@ -80,13 +85,7 @@ export async function exportRedactedPdf(opts: ExportOptions): Promise<Blob> {
         viewport: vp,
         intent: 'print',
       } as never);
-      await Promise.race([
-        renderTask.promise,
-        new Promise((_, rej) =>
-          setTimeout(() => rej(new Error('render timeout')), 15000)
-        ),
-      ]);
-      console.log('[export] rendered', p);
+      await renderTask.promise;
 
       // 畫遮蔽（燒進圖片）
       const pageRects = redactions.filter((r) => r.pageIndex === p - 1);

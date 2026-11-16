@@ -285,9 +285,12 @@ export default function App() {
   const watermarkStyle = useMemo<React.CSSProperties>(() => {
     if (!watermarkText.trim()) return {};
     const len = watermarkText.trim().length || 1;
+    const w = displaySize.w;
+    const h = displaySize.h;
+    // 旋轉 45° 後 bounding ≈ (字寬 + 字高) × 0.707，取保守值避免被裁
     const fontSize = Math.max(
       12,
-      Math.min(displaySize.w / (len * 0.72), displaySize.h * 0.22)
+      Math.min(h * 0.18, (Math.SQRT2 * Math.min(w, h) / (len + 1)) * 0.92)
     );
     return {
       fontSize: `${fontSize}px`,
