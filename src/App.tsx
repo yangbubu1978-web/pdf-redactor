@@ -230,6 +230,7 @@ export default function App() {
           width: d.rect.width,
           height: d.rect.height,
           category: d.category,
+          confidence: d.confidence,
         })),
       ]);
       showToast(
@@ -412,8 +413,13 @@ export default function App() {
                         }}
                         className="flex-1 text-left min-w-0"
                       >
-                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
-                          {d.category} · P{d.pageIndex + 1}
+                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <span>{d.category} · P{d.pageIndex + 1}</span>
+                          {d.confidence === 'medium' && (
+                            <span className="text-amber-500 normal-case tracking-normal">
+                              · 需確認
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] font-bold font-mono text-slate-700 truncate">
                           {d.text}
