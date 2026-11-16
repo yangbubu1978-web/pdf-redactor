@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "travel-collection-34302"
+  },
+  "targets": {
+    "travel-collection-34302": {
+      "hosting": {
+        "redactor": ["pdf-redactor-maker"]
+      }
+    }
+  }
+}
