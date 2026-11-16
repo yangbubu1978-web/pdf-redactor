@@ -39,6 +39,7 @@ const AMOUNT_WORDS = [
   '金額合計', '總金額', '小計金額', '未稅', '含稅',
   '完稅價格', '離岸價格', '到岸價格', '起岸價格', '發票金額', '申報金額', '應付金額', '實付金額',
   '進口稅', '推廣貿易服務費', '稅費合計', '營業稅稅基', '滯納金', '貨物稅',
+  '應加費用', '應減費用', '離岸價格', '起岸價格', '完稅價格',
 ];
 
 const PHONE_WORDS = [
@@ -163,6 +164,18 @@ export const RULES: DetectRule[] = [
   // 稅率／費率百分比（報關單的進口稅率、貨物稅率）
   { category: '稅率', riskLevel: 'MEDIUM', priority: 68, confidence: 'high',
     pattern: /(?<!\d)\d{1,3}(?:\.\d+)?[ ]?%(?!\d)/g },
+
+  // 幣別代碼（正式報單規格：連幣別都要遮，避免反推價格區間）
+  { category: '幣別', riskLevel: 'MEDIUM', priority: 74, confidence: 'high',
+    pattern: /(?<![A-Za-z])(?:USD|TWD|THB|CNY|RMB|JPY|EUR|HKD|GBP|AUD|VND|SGD|MYR|KRW|PHP|IDR|CAD|NZD|CHF)(?![A-Za-z])/g },
+
+  // 納稅辦法代碼（例 D21、D02），只在「納稅辦法」字樣附近抓
+  { category: '納稅辦法', riskLevel: 'MEDIUM', priority: 62, confidence: 'medium',
+    pattern: /(?:納\s*稅\s*辦\s*法)[^A-Za-z0-9]{0,8}([A-Z]\d{1,3})/g, captureGroup: 1 },
+
+  // 海關監管編號（例 135、CYCETG），需在海關監管編號字樣附近
+  { category: '海關監管編號', riskLevel: 'MEDIUM', priority: 58, confidence: 'medium',
+    pattern: /(?:海\s*關\s*監\s*管\s*編\s*號)[^A-Za-z0-9]{0,8}([A-Z0-9]{3,10})(?!\d)/g, captureGroup: 1 },
 
   // 地址：格式夠獨特，直接抓
   { category: '地址', riskLevel: 'LOW', priority: 50, confidence: 'high',
@@ -737,6 +750,9 @@ export function categoryColor(category: string): string {
     提單號碼: '#b91c1c',
     匯率: '#0891b2',
     稅率: '#c2410c',
+    幣別: '#0f766e',
+    納稅辦法: '#7c2d12',
+    海關監管編號: '#1e40af',
     地址: '#64748b',
     手動: '#111827',
   };
