@@ -495,6 +495,53 @@ export default function App() {
               </p>
             </section>
 
+            {/* 遮蔽範本 */}
+            <section className="space-y-2">
+              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" /> 遮蔽範本
+              </h2>
+              <p className="text-[10px] font-bold text-slate-400 px-1 leading-relaxed">
+                掃描件沒有文字層，無法自動辨識。同一版型的報單框一次存起來，下次一鍵套用。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={saveTemplate}
+                  className="flex-1 rounded-xl px-3 py-2.5 text-xs font-black bg-slate-900 text-white active:scale-[0.98] transition-all"
+                >
+                  存成範本
+                </button>
+              </div>
+              {templates.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  {templates.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2"
+                    >
+                      <button
+                        onClick={() => applyTemplate(t)}
+                        className="flex-1 text-left min-w-0"
+                      >
+                        <div className="text-[11px] font-black text-slate-700 truncate">
+                          {t.name}
+                        </div>
+                        <div className="text-[9px] font-bold text-slate-400">
+                          {t.rects.length} 處 · {t.ptW}×{t.ptH}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => deleteTemplate(t.id)}
+                        className="text-slate-300 hover:text-rose-500 p-1"
+                        aria-label="刪除範本"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
             {/* 自動偵測 */}
             <section className="space-y-2">
               <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -594,52 +641,7 @@ export default function App() {
               )}
             </section>
 
-            {/* 遮蔽範本 */}
-            <section className="space-y-2">
-              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5" /> 遮蔽範本
-              </h2>
-              <p className="text-[10px] font-bold text-slate-400 px-1 leading-relaxed">
-                掃描件沒有文字層，無法自動辨識。同一版型的報單框一次存起來，下次一鍵套用。
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={saveTemplate}
-                  className="flex-1 rounded-xl px-3 py-2.5 text-xs font-black bg-slate-900 text-white active:scale-[0.98] transition-all"
-                >
-                  存成範本
-                </button>
-              </div>
-              {templates.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  {templates.map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2"
-                    >
-                      <button
-                        onClick={() => applyTemplate(t)}
-                        className="flex-1 text-left min-w-0"
-                      >
-                        <div className="text-[11px] font-black text-slate-700 truncate">
-                          {t.name}
-                        </div>
-                        <div className="text-[9px] font-bold text-slate-400">
-                          {t.rects.length} 處 · {t.ptW}×{t.ptH}
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => deleteTemplate(t.id)}
-                        className="text-slate-300 hover:text-rose-500 p-1"
-                        aria-label="刪除範本"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+            
           </>
         )}
       </div>
