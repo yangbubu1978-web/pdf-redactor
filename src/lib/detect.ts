@@ -377,7 +377,7 @@ export function mergeRects<
   T extends { x: number; y: number; width: number; height: number }
 >(rects: T[]): T[] {
   if (rects.length <= 1) return rects;
-  const sorted = [...rects].sort((a, b) => a.y - b.y || a.x - b.x);
+  const sorted = rects.toSorted((a, b) => a.y - b.y || a.x - b.x);
   const merged: T[] = [];
   for (const cur of sorted) {
     let done = false;
@@ -515,7 +515,7 @@ function buildRows(items: PdfTextItem[]) {
       h: Math.abs(i.height || i.transform![3] || 10),
       s: (i.str ?? '').trim(),
     }))
-    .sort((a, b) => b.y - a.y || a.x - b.x);
+    .toSorted((a, b) => b.y - a.y || a.x - b.x);
 
   const rows: { y: number; text: string; x1: number; x2: number; h: number }[] = [];
   let cur: typeof list = [];
